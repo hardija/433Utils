@@ -1,0 +1,3 @@
+[submodule "rc-switch"]
+	path = rc-switch
+	url = git@github.com:hardija/rc-switch.git
