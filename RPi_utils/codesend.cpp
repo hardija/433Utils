@@ -1,5 +1,5 @@
 /*
-Usage: ./codesend decimalcode [protocol] [pulselength]
+Usage: ./codesend decimalcode [-p pin] [-l pulselength] [-c protocol]
 decimalcode - As decoded by RFSniffer
 protocol    - According to rc-switch definitions
 pulselength - pulselength in microseconds
@@ -14,41 +14,91 @@ pulselength - pulselength in microseconds
 (Use RF_Sniffer.ino to check that RF signals are being produced by the RPi's transmitter 
 or your remote control)
 */
+
 #include "../rc-switch/RCSwitch.h"
 #include <stdlib.h>
 #include <stdio.h>
+#include <unistd.h>
      
+#define DEFAULT_PIN           0
+#define DEFAULT_PULSE_LENGTH  189
+#define DEFAULT_PROTOCOL      1
+
+void printUsage(char *argv[]) {
+    printf("Usage: %s <code> [-p <PIN Number> (default: %i)] [-l <Pulse Length> (default: %i)] [-c <protocol> (default: %i)].\n", argv[0], DEFAULT_PIN, DEFAULT_PULSE_LENGTH, DEFAULT_PROTOCOL);
+}
 
 int main(int argc, char *argv[]) {
     
-    // This pin is not the first pin on the RPi GPIO header!
-    // Consult https://projects.drogon.net/raspberry-pi/wiringpi/pins/
-    // for more information.
-    int PIN = 0;
-    
-    // Parse the first parameter to this command as an integer
-    int protocol = 0; // A value of 0 will use rc-switch's default value
-    int pulseLength = 0;
+    int i;
 
-    // If no command line argument is given, print the help text
-    if (argc == 1) {
-        printf("Usage: %s decimalcode [protocol] [pulselength]\n", argv[0]);
-        printf("decimalcode\t- As decoded by RFSniffer\n");
-        printf("protocol\t- According to rc-switch definitions\n");
-        printf("pulselength\t- pulselength in microseconds\n");
-        return -1;
+    char * argumentPIN = NULL;
+    char * argumentPulseLength = NULL;
+    char * argumentProtocol = NULL;
+
+    int c;
+    while ((c = getopt(argc, argv, "p:l:")) != -1) {
+        switch (c) {
+            case 'p':
+                argumentPIN = optarg;
+                break;
+
+            case 'l':
+                argumentPulseLength = optarg;
+                break;
+
+            case 'c':
+                argumentProtocol = optarg;
+                break;
+
+            case '?':
+            default:
+                printUsage(argv);
+                break;
+            }
     }
 
-    // Change protocol and pulse length accroding to parameters
-    int code = atoi(argv[1]);
-    if (argc >= 3) protocol = atoi(argv[2]);
-    if (argc >= 4) pulseLength = atoi(argv[3]);
-    
-    if (wiringPiSetup () == -1) return 1;
-    printf("sending code[%i]\n", code);
+    /* Now set the values of "argc" and "argv" to the values after the
+       options have been processed, above. */
+    argc -= optind;
+
+    if (argc == 0) {
+        printUsage(argv);
+        return EXIT_FAILURE;
+    }
+
+    argv += optind;
+
+    // Parse the first parameter to this command as an integer
+    int code = atoi(argv[0]);
+
+    // This PIN is not the first PIN on the Raspberry Pi GPIO header!
+    // Consult https://projects.drogon.net/raspberry-pi/wiringpi/pins/
+    // for more information.
+    int PIN = DEFAULT_PIN;
+
+    if (argumentPIN != NULL) {
+        PIN = atoi(argumentPIN);
+    }
+
+    // Pulse length depends on the RF outlets you are using. Use RFSniffer to see what pulse length your device uses.
+    int pulseLength = DEFAULT_PULSE_LENGTH;
+
+    if (argumentPulseLength != NULL) {
+        pulseLength = atoi(argumentPulseLength);
+    }
+
+    // Protocol depends on the RF outlets you are using. Use RFSniffer to see what pulse length your device uses.
+    int protocol = DEFAULT_PROTOCOL;
+
+    if (argumentProtocol != NULL) {
+        protocol = atoi(argumentProtocol);
+    }
+
+    printf("Sending Code: %i. PIN: %i. Protocol: %i. Pulse Length: %i.\n", code, PIN, protocol, pulseLength);
+
     RCSwitch mySwitch = RCSwitch();
-    if (protocol != 0) mySwitch.setProtocol(protocol);
-    if (pulseLength != 0) mySwitch.setPulseLength(pulseLength);
+    mySwitch.setProtocol(protocol, pulseLength);
     mySwitch.enableTransmit(PIN);
     
     mySwitch.send(code, 24);
